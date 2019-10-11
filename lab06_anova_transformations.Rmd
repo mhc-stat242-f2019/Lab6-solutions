@@ -1,0 +1,122 @@
+---
+title: "Lab06 - Transformations for ANOVA"
+output: pdf_document
+---
+
+## Goals
+
+The goal in this lab is to practice working with transformations for ANOVA.
+
+## Loading packages
+
+Here are some packages with functionality you may need for this lab.  Run this code chunk now.
+
+```{r}
+library(readr)
+library(ggplot2)
+library(gridExtra)
+library(mosaic)
+library(dplyr)
+
+options("pillar.sigfig" = 10) # print 10 significant digits in summarize output
+```
+
+A gas chromatograph is an instrument that measures the amounts of various compounds contained in a sample by separating the various constituents.  The total number of counts recorded by the chromatograph is proportional to the amount of the compound present.
+
+A calibration experiment was performed to see how the recorded counts from the chromatograph related to the concentration of a compound in a mixture and the flow rate through the chromatograph.  In this lab we will just look at the relationship between the concentration (explanatory variable) and the counts (response variable).
+
+```{r}
+chromatography <- read_csv("http://www.evanlray.com/data/sdm3/Chapter_29/Ch29_Chromatography.csv")
+names(chromatography) <- c("concentration", "flow_rate", "counts")
+
+chromatography %>%
+  count(concentration)
+```
+
+#### 1. Make an appropriate plot of the data: it might be nice to use a histogram or density plot, separately for each value of cylinders. Also calculate the standard deviation for each group. Would it be appropriate to use an ANOVA model for these data?
+
+```{r}
+ggplot(data = chromatography, mapping = aes(x = concentration, y = counts)) +
+  geom_boxplot()
+
+chromatography %>%
+  group_by(concentration) %>%
+  summarize(
+    sd(counts)
+  )
+```
+
+#### 2. Find a transformation of the data so that the ANOVA model would be appropriate.
+
+```{r}
+chromatography <- chromatography %>%
+  mutate(
+    sqrt_counts = sqrt(counts),
+    log_counts = log(counts),
+    inv_sqrt_counts = -1/sqrt(counts)
+  )
+
+p_sqrt <- ggplot(data = chromatography, mapping = aes(x = concentration, y = sqrt_counts)) +
+  geom_boxplot() 
+p_log <- ggplot(data = chromatography, mapping = aes(x = concentration, y = log_counts)) +
+  geom_boxplot()
+p_inv_sqrt <- ggplot(data = chromatography, mapping = aes(x = concentration, y = inv_sqrt_counts)) +
+  geom_boxplot()
+
+grid.arrange(p_sqrt, p_log, p_inv_sqrt)
+
+chromatography %>%
+  group_by(concentration) %>%
+  summarize(
+    sd(sqrt_counts),
+    sd(log_counts),
+    sd(inv_sqrt_counts)
+  )
+```
+
+The standard deviations in the different groups are most consistent with a log transformations.  The distributions are close enough to normally distributed.
+
+#### 3. Conduct a test of the claim that the mean count is the same for all three concentration levels.
+
+This is formally a test of the claim that the mean of the log count is the same for all three concentration levels, since we're working with log-transformed data.
+
+$H_0: \mu_1 = \mu_2 = \mu_3$
+$H_A:$ at least one of $\mu_1$, $\mu_2$, and $\mu_3$ is not equal to the others
+
+```{r}
+model_fit <- lm(log_counts ~ concentration, data = chromatography)
+summary(model_fit)
+```
+
+The p-value for the test is less than $2.2 \times 10^{-16}$.  There is extremely strong evidence against the null hypothesis that the mean of the log count is the same for all three concentration levels.
+
+#### 4. Report and interpret an estimate of the difference in the centers of the distributions of counts for the high concentration and the low concentration, as well as a 95% confidence interval for that difference.  You should be able to do this in a few different ways.
+
+```{r}
+fit <- lm(log_counts ~ concentration, data = chromatography)
+summary(fit)
+confint(fit)
+```
+
+
+```{r}
+exp(-2.31775)
+```
+We estimate that the median count in the low group is about 0.1 times the median count for the high group.
+
+We can verify this by looking at the actual medians for these groups:
+
+```{r}
+chromatography %>%
+  group_by(concentration) %>%
+  summarize(
+    median(counts)
+  )
+```
+
+OR
+
+```{r}
+exp(2.31775)
+```
+We estimate that the median count in the high group is about 10 times the median concentration for the low group.
